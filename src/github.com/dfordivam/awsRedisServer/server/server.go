@@ -34,14 +34,19 @@ func main() {
 	// Get a UserController instance
 	uc := controllers.NewUserController(mainDB, activityDB, sessionDB)
 
-	// Get a user resource
-	r.GET("/auth/login", uc.LoginUser)
-
+	// User stuff
 	r.POST("/auth/login", uc.LoginUser)
+
+	r.POST("/auth/logout", uc.LogoutUser)
 
 	r.POST("/user", uc.CreateUser)
 
-	r.DELETE("/user/:id", uc.RemoveUser)
+	// Messaging
+	r.POST("/message/post", uc.PostMessage)
+
+	r.GET("/messages", uc.GetMessages)
+
+	// r.GET("/user/:id", uc.GetUserInfo)
 
 	// Fire up the server
 	http.ListenAndServe("localhost:3000", r)

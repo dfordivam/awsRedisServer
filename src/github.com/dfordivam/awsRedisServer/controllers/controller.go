@@ -22,24 +22,25 @@ type (
 	}
 )
 
-const UserNameHashKey = "UserNameHashKey"
-const UserIDHashKey = "UserIDHashKey"
-const UserCount = "UserCount"
-const UserSessionDB = "UserSessionDB"
+const userNameHashKey = "userNameHashKey"
+const userIDHashKey = "userIDHashKey"
+const userCount = "userCount"
+const userSessionDB = "userSessionDB"
+const messageList = "messageList"
 
 func NewUserController(u, a, s *redis.Client) *UserController {
-	if u.Exists(UserNameHashKey).Val() == 0 {
+	if u.Exists(userNameHashKey).Val() == 0 {
 		auser := models.UserNameHashFieldValue{"adminpass", 1}
 		au, _ := json.Marshal(auser)
-		u.HSet(UserNameHashKey, "admin", au)
-		fmt.Println("Created UserNameHashKey")
+		u.HSet(userNameHashKey, "admin", au)
+		fmt.Println("Created userNameHashKey")
 	}
-	if u.Exists(UserIDHashKey).Val() == 0 {
-		u.HSet(UserIDHashKey, "1", "admin")
-		fmt.Println("Created UserIDHashKey")
+	if u.Exists(userIDHashKey).Val() == 0 {
+		u.HSet(userIDHashKey, "1", "admin")
+		fmt.Println("Created userIDHashKey")
 	}
-	if u.Exists(UserCount).Val() == 0 {
-		u.Set(UserCount, 1, 0)
+	if u.Exists(userCount).Val() == 0 {
+		u.Set(userCount, 1, 0)
 	}
 	rand.Seed(time.Now().UnixNano())
 	s.FlushDBAsync()
@@ -73,14 +74,14 @@ func (uc UserController) LoginUser(w http.ResponseWriter, r *http.Request, p htt
 	// Populate the user data
 	json.NewDecoder(r.Body).Decode(&u)
 
-	if uc.mainDB.HExists(UserNameHashKey, u.Name).Val() == false {
+	if uc.mainDB.HExists(userNameHashKey, u.Name).Val() == false {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(405)
 		fmt.Fprintf(w, "%s", "Username not valid")
 		return
 	}
 
-	ufvJson := uc.mainDB.HGet(UserNameHashKey, u.Name).Val()
+	ufvJson := uc.mainDB.HGet(userNameHashKey, u.Name).Val()
 
 	var ufv models.UserNameHashFieldValue
 	json.NewDecoder(strings.NewReader(ufvJson)).Decode(&ufv)
@@ -110,7 +111,7 @@ func (uc UserController) CreateUser(w http.ResponseWriter, r *http.Request, p ht
 	// Populate the user data
 	json.NewDecoder(r.Body).Decode(&u)
 
-	if uc.mainDB.HExists(UserNameHashKey, u.Name).Val() {
+	if uc.mainDB.HExists(userNameHashKey, u.Name).Val() {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(405)
 		fmt.Fprintf(w, "%s", "Username not available")
@@ -118,15 +119,15 @@ func (uc UserController) CreateUser(w http.ResponseWriter, r *http.Request, p ht
 	}
 
 	// Add an Id
-	count := uc.mainDB.Incr(UserCount)
+	count := uc.mainDB.Incr(userCount)
 	u.Id = count.Val()
 
 	ufv, _ := json.Marshal(models.UserNameHashFieldValue{u.Name, u.Id})
 	i := strconv.FormatInt(u.Id, 10)
 
 	// Add to DBs
-	uc.mainDB.HSet(UserNameHashKey, u.Name, ufv)
-	uc.mainDB.HSet(UserIDHashKey, i, u.Name)
+	uc.mainDB.HSet(userNameHashKey, u.Name, ufv)
+	uc.mainDB.HSet(userIDHashKey, i, u.Name)
 
 	// Marshal provided interface into JSON structure
 	// uj, _ := json.Marshal(u)
@@ -137,13 +138,116 @@ func (uc UserController) CreateUser(w http.ResponseWriter, r *http.Request, p ht
 	fmt.Fprintf(w, "%s", "Success")
 }
 
-// RemoveUser removes an existing user resource
-// NYI
-func (uc UserController) RemoveUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// TODO: only write status for now
-	w.WriteHeader(200)
+func (uc UserController) LogoutUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+	authHead, found := r.Header["Authorization"]
+	sessTok := strings.TrimPrefix(authHead[0], "Bearer ")
+	if found == false || sessTok == authHead[0] {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(401)
+		fmt.Fprintf(w, "%s", "Not logged in")
+		return
+	}
+
+	_, res := uc.sessionDB.Get(sessTok).Result()
+	if res == redis.Nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(401)
+		fmt.Fprintf(w, "%s", "Invalid auth token, login again")
+		return
+	}
+
+	uc.sessionDB.Del(sessTok)
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(201)
+	fmt.Fprintf(w, "%s", "Success")
 }
 
+func (uc UserController) PostMessage(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+	authHead, found := r.Header["Authorization"]
+	sessTok := strings.TrimPrefix(authHead[0], "Bearer ")
+	if found == false || sessTok == authHead[0] {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(401)
+		fmt.Fprintf(w, "%s", "Not logged in")
+		return
+	}
+
+	userIdStr, res := uc.sessionDB.Get(sessTok).Result()
+	if res == redis.Nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(401)
+		fmt.Fprintf(w, "%s", "Invalid auth token, login again")
+		return
+	}
+
+	userId, _ := strconv.ParseInt(userIdStr, 10, 64)
+
+	var msgObj models.MessageObject
+	json.NewDecoder(r.Body).Decode(&msgObj)
+
+	if msgObj.UserId != userId {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(401)
+		fmt.Fprintf(w, "%s", "Invalid auth token, login again")
+		return
+	}
+
+	msg, _ := json.Marshal(msgObj)
+	uc.mainDB.LPush(messageList, msg)
+	len := uc.mainDB.LLen(messageList)
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(201)
+	fmt.Fprintf(w, "%s", len)
+}
+
+func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+	authHead, found := r.Header["Authorization"]
+	sessTok := strings.TrimPrefix(authHead[0], "Bearer ")
+	if found == false || sessTok == authHead[0] {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(401)
+		fmt.Fprintf(w, "%s", "Not logged in")
+		return
+	}
+
+	_, res := uc.sessionDB.Get(sessTok).Result()
+	if res == redis.Nil {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(401)
+		fmt.Fprintf(w, "%s", "Invalid auth token, login again")
+		return
+	}
+
+	// The length of messageList when last synced
+	// It acts as a pseudoId
+	lastMsg, found := r.Header["LastMessage"]
+
+	length := uc.mainDB.LLen(messageList)
+	var l int64
+	if found {
+		last, _ := strconv.ParseInt(lastMsg[0], 10, 64)
+		l = length.Val() - last
+	} else {
+		l = 50
+	}
+
+	// []string
+	ss := uc.mainDB.LRange(messageList, 0, l).Val()
+
+	msgs := make([]models.MessageObject, len(ss))
+	for i := 0; i < len(ss); i++ {
+		json.NewDecoder(strings.NewReader(ss[i])).Decode(&(msgs[i]))
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	fmt.Fprintf(w, "%s", msgs)
+}
+
+// Util stuff
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 func randStringBytes(n int) string {
