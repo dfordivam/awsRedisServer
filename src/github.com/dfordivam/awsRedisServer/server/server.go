@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	// Third party packages
+	"github.com/dfordivam/awsRedisServer/models"
 	"github.com/julienschmidt/httprouter"
-	"models"
 )
 
 func main() {
