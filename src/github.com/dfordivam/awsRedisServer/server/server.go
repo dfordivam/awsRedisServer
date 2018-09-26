@@ -14,17 +14,30 @@ func main() {
 	// Instantiate a new router
 	r := httprouter.New()
 
-	userDB := redis.NewClient(&redis.Options{
+	mainDB := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
 
+	activityDB := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       1,  // use default DB
+	})
+
+	sessionDB := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       2,  // use default DB
+	})
 	// Get a UserController instance
-	uc := controllers.NewUserController(userDB)
+	uc := controllers.NewUserController(mainDB, activityDB, sessionDB)
 
 	// Get a user resource
-	r.GET("/user/:id", uc.GetUser)
+	r.GET("/auth/login", uc.LoginUser)
+
+	r.POST("/auth/login", uc.LoginUser)
 
 	r.POST("/user", uc.CreateUser)
 
