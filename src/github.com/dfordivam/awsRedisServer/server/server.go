@@ -47,6 +47,8 @@ func main() {
 
 	r.GET("/messages/:last", uc.GetMessages)
 
+	r.ServeFiles("/static/*filepath", http.Dir("static/"))
+
 	handler := cors.AllowAll().Handler(r)
 	// Fire up the server
 	http.ListenAndServe("localhost:3000", handler)
