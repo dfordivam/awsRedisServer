@@ -141,6 +141,7 @@ func (uc UserController) CreateUser(w http.ResponseWriter, r *http.Request, p ht
 
 func (uc UserController) LogoutUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
+	fmt.Println("Doing logout")
 	authHead, found := r.Header["Authorization"]
 	sessTok := strings.TrimPrefix(authHead[0], "Bearer ")
 	if found == false || sessTok == authHead[0] {
@@ -164,7 +165,7 @@ func (uc UserController) LogoutUser(w http.ResponseWriter, r *http.Request, p ht
 	fmt.Fprintf(w, "%s", "Success")
 }
 
-func (uc UserController) PostMessage(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (uc UserController) doAuthGetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) (userId int64) {
 
 	authHead, found := r.Header["Authorization"]
 	sessTok := strings.TrimPrefix(authHead[0], "Bearer ")
@@ -175,25 +176,33 @@ func (uc UserController) PostMessage(w http.ResponseWriter, r *http.Request, p h
 		return
 	}
 
-	userIdStr, res := uc.sessionDB.Get(sessTok).Result()
-	if res == redis.Nil {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(401)
-		fmt.Fprintf(w, "%s", "Invalid auth token, login again")
-		return
-	}
+	userIdStr, _ := uc.sessionDB.Get(sessTok).Result()
+	fmt.Println("Post message", sessTok, userIdStr)
+	// if res == redis.Nil {
+	// 	w.Header().Set("Content-Type", "text/plain")
+	// 	w.WriteHeader(401)
+	// 	fmt.Fprintf(w, "%s", "Invalid auth token, login again")
+	// 	return
+	// }
 
-	userId, _ := strconv.ParseInt(userIdStr, 10, 64)
+	userId, _ = strconv.ParseInt(userIdStr, 10, 64)
+	return
+}
+
+func (uc UserController) PostMessage(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+	userId := uc.doAuthGetUser(w, r, p)
 
 	var msgObj models.MessageObject
 	json.NewDecoder(r.Body).Decode(&msgObj)
 
-	if msgObj.UserId != userId {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(401)
-		fmt.Fprintf(w, "%s", "Invalid auth token, login again")
-		return
-	}
+	msgObj.UserId = userId
+	// if msgObj.UserId != userId {
+	// 	w.Header().Set("Content-Type", "text/plain")
+	// 	w.WriteHeader(401)
+	// 	fmt.Fprintf(w, "%s", "Invalid auth token, login again")
+	// 	return
+	// }
 
 	msg, _ := json.Marshal(msgObj)
 	uc.mainDB.LPush(messageList, msg)
@@ -206,22 +215,7 @@ func (uc UserController) PostMessage(w http.ResponseWriter, r *http.Request, p h
 
 func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
-	authHead, found := r.Header["Authorization"]
-	sessTok := strings.TrimPrefix(authHead[0], "Bearer ")
-	if found == false || sessTok == authHead[0] {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(401)
-		fmt.Fprintf(w, "%s", "Not logged in")
-		return
-	}
-
-	_, res := uc.sessionDB.Get(sessTok).Result()
-	if res == redis.Nil {
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(401)
-		fmt.Fprintf(w, "%s", "Invalid auth token, login again")
-		return
-	}
+	uc.doAuthGetUser(w, r, p)
 
 	// The length of messageList when last synced
 	// It acts as a pseudoId
@@ -245,7 +239,8 @@ func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p h
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	fmt.Fprintf(w, "%s", msgs)
+	msgsJson, _ := json.Marshal(msgs)
+	fmt.Fprintf(w, "%s", msgsJson)
 }
 
 // Util stuff

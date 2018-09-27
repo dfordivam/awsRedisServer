@@ -47,7 +47,7 @@ func main() {
 
 	// r.GET("/user/:id", uc.GetUserInfo)
 
-	handler := cors.Default().Handler(r)
+	handler := cors.AllowAll().Handler(r)
 	// Fire up the server
 	http.ListenAndServe("localhost:3000", handler)
 }
