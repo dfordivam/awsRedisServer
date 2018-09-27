@@ -68,6 +68,7 @@ func (uc UserController) GetUser(w http.ResponseWriter, r *http.Request, p httpr
 // GetUser retrieves an individual user resource
 func (uc UserController) LoginUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
+	fmt.Println("Doing login")
 	// Stub an user to be populated from the body
 	u := models.User{}
 

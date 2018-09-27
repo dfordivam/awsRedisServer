@@ -8,6 +8,7 @@ import (
 	"github.com/dfordivam/awsRedisServer/controllers"
 	"github.com/go-redis/redis"
 	"github.com/julienschmidt/httprouter"
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -39,15 +40,14 @@ func main() {
 
 	r.POST("/auth/logout", uc.LogoutUser)
 
-	r.POST("/user", uc.CreateUser)
-
 	// Messaging
-	r.POST("/message/post", uc.PostMessage)
+	r.POST("/message", uc.PostMessage)
 
 	r.GET("/messages", uc.GetMessages)
 
 	// r.GET("/user/:id", uc.GetUserInfo)
 
+	handler := cors.Default().Handler(r)
 	// Fire up the server
-	http.ListenAndServe("localhost:3000", r)
+	http.ListenAndServe("localhost:3000", handler)
 }
