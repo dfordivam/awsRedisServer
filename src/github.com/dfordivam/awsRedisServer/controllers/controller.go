@@ -224,9 +224,10 @@ func (uc UserController) sendMessages(w http.ResponseWriter, r *http.Request, p 
 	if l >= 0 {
 		ss := uc.mainDB.LRange(messageList, 0, l).Val()
 
-		msgs := make([]models.MessageObject, len(ss))
-		for i := 0; i < len(ss); i++ {
-			json.NewDecoder(strings.NewReader(ss[i])).Decode(&(msgs[i]))
+		ll := len(ss)
+		msgs := make([]models.MessageObject, ll)
+		for i := 0; i < ll; i++ {
+			json.NewDecoder(strings.NewReader(ss[i])).Decode(&(msgs[ll-i-1]))
 		}
 		sm.Messages = msgs
 	}

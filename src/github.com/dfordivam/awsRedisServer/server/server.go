@@ -40,6 +40,8 @@ func main() {
 
 	r.POST("/auth/logout", uc.LogoutUser)
 
+	r.POST("/register", uc.CreateUser)
+
 	// Messaging
 	r.POST("/message", uc.PostMessage)
 
