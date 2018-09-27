@@ -43,7 +43,7 @@ func main() {
 	// Messaging
 	r.POST("/message", uc.PostMessage)
 
-	r.GET("/messages", uc.GetMessages)
+	r.GET("/messages/:last", uc.GetMessages)
 
 	handler := cors.AllowAll().Handler(r)
 	// Fire up the server

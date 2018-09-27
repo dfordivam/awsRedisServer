@@ -186,7 +186,7 @@ func (uc UserController) PostMessage(w http.ResponseWriter, r *http.Request, p h
 	msg, _ := json.Marshal(msgObj)
 	uc.mainDB.LPush(messageList, msg)
 
-	uc.sendMessages(w, r, p, postMsg.LastMessageId)
+	uc.sendMessages(w, r, p, postMsg.LastSyncVal)
 }
 
 func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -195,33 +195,45 @@ func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p h
 
 	// The length of messageList when last synced
 	// It acts as a pseudoId
-	lastMsg, found := r.Header["start"]
+	lastStr := p.ByName("last")
 
-	length := uc.mainDB.LLen(messageList)
-	var l int64
-	if found {
-		last, _ := strconv.ParseInt(lastMsg[0], 10, 64)
-		l = length.Val() - last
+	var last int64
+	if lastStr != "" {
+		last, _ = strconv.ParseInt(lastStr, 10, 64)
 	} else {
+		last = 0
+	}
+
+	fmt.Println("last:-", lastStr, last)
+	uc.sendMessages(w, r, p, last)
+}
+
+func (uc UserController) sendMessages(w http.ResponseWriter, r *http.Request, p httprouter.Params, last int64) {
+	// []string
+
+	var l int64
+	length := uc.mainDB.LLen(messageList)
+	if last != 0 {
+		l = length.Val() - last - 1
+	} else {
+		// if last sync not available, then send a max of 50 messages
 		l = 50
 	}
 
-	uc.sendMessages(w, r, p, l)
-}
+	var sm models.SendMessages
+	if l >= 0 {
+		ss := uc.mainDB.LRange(messageList, 0, l).Val()
 
-func (uc UserController) sendMessages(w http.ResponseWriter, r *http.Request, p httprouter.Params, l int64) {
-	// []string
-	ss := uc.mainDB.LRange(messageList, 0, l).Val()
-
-	msgs := make([]models.MessageObject, len(ss))
-	for i := 0; i < len(ss); i++ {
-		json.NewDecoder(strings.NewReader(ss[i])).Decode(&(msgs[i]))
+		msgs := make([]models.MessageObject, len(ss))
+		for i := 0; i < len(ss); i++ {
+			json.NewDecoder(strings.NewReader(ss[i])).Decode(&(msgs[i]))
+		}
+		sm.Messages = msgs
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	var sm models.SendMessages
-	sm.Messages = msgs
-	sm.MessageId = l
+	// Data synced till this length
+	sm.MessageId = length.Val()
 	msgsJson, _ := json.Marshal(sm)
 	fmt.Fprintf(w, "%s", msgsJson)
 }

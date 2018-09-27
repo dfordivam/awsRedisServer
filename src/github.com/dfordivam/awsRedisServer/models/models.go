@@ -28,8 +28,8 @@ type (
 type (
 	// Message stored in DB
 	PostMessage struct {
-		Message       string `json:"msg"`
-		LastMessageId int64  `json:"id"`
+		Message     string `json:"msg"`
+		LastSyncVal int64  `json:"id"`
 	}
 )
 
