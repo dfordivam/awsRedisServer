@@ -48,24 +48,6 @@ func NewUserController(u, a, s *redis.Client) *UserController {
 }
 
 // GetUser retrieves an individual user resource
-func (uc UserController) GetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	// Stub an example user
-	u := models.User{
-		Name: "Bob Smith",
-		Pass: "passbob",
-		Id:   1,
-	}
-
-	// Marshal provided interface into JSON structure
-	uj, _ := json.Marshal(u)
-
-	// Write content-type, statuscode, payload
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	fmt.Fprintf(w, "%s", uj)
-}
-
-// GetUser retrieves an individual user resource
 func (uc UserController) LoginUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 	fmt.Println("Doing login")
@@ -165,7 +147,7 @@ func (uc UserController) LogoutUser(w http.ResponseWriter, r *http.Request, p ht
 	fmt.Fprintf(w, "%s", "Success")
 }
 
-func (uc UserController) doAuthGetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) (userId int64) {
+func (uc UserController) doAuthGetUser(w http.ResponseWriter, r *http.Request, p httprouter.Params) (user string) {
 
 	authHead, found := r.Header["Authorization"]
 	sessTok := strings.TrimPrefix(authHead[0], "Bearer ")
@@ -177,7 +159,7 @@ func (uc UserController) doAuthGetUser(w http.ResponseWriter, r *http.Request, p
 	}
 
 	userIdStr, _ := uc.sessionDB.Get(sessTok).Result()
-	fmt.Println("Post message", sessTok, userIdStr)
+	// TODO ->
 	// if res == redis.Nil {
 	// 	w.Header().Set("Content-Type", "text/plain")
 	// 	w.WriteHeader(401)
@@ -185,32 +167,26 @@ func (uc UserController) doAuthGetUser(w http.ResponseWriter, r *http.Request, p
 	// 	return
 	// }
 
-	userId, _ = strconv.ParseInt(userIdStr, 10, 64)
+	user = uc.mainDB.HGet(userIDHashKey, userIdStr).Val()
 	return
 }
 
 func (uc UserController) PostMessage(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
-	userId := uc.doAuthGetUser(w, r, p)
+	user := uc.doAuthGetUser(w, r, p)
 
 	var msgObj models.MessageObject
-	json.NewDecoder(r.Body).Decode(&msgObj)
+	var postMsg models.PostMessage
+	json.NewDecoder(r.Body).Decode(&postMsg)
 
-	msgObj.UserId = userId
-	// if msgObj.UserId != userId {
-	// 	w.Header().Set("Content-Type", "text/plain")
-	// 	w.WriteHeader(401)
-	// 	fmt.Fprintf(w, "%s", "Invalid auth token, login again")
-	// 	return
-	// }
+	msgObj.User = user
+	msgObj.Message = postMsg.Message
 
+	fmt.Println("Adding msg to db", msgObj)
 	msg, _ := json.Marshal(msgObj)
 	uc.mainDB.LPush(messageList, msg)
-	len := uc.mainDB.LLen(messageList)
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(201)
-	fmt.Fprintf(w, "%s", len)
+	uc.sendMessages(w, r, p, postMsg.LastMessageId)
 }
 
 func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -219,7 +195,7 @@ func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p h
 
 	// The length of messageList when last synced
 	// It acts as a pseudoId
-	lastMsg, found := r.Header["LastMessage"]
+	lastMsg, found := r.Header["start"]
 
 	length := uc.mainDB.LLen(messageList)
 	var l int64
@@ -230,6 +206,10 @@ func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p h
 		l = 50
 	}
 
+	uc.sendMessages(w, r, p, l)
+}
+
+func (uc UserController) sendMessages(w http.ResponseWriter, r *http.Request, p httprouter.Params, l int64) {
 	// []string
 	ss := uc.mainDB.LRange(messageList, 0, l).Val()
 
@@ -239,7 +219,10 @@ func (uc UserController) GetMessages(w http.ResponseWriter, r *http.Request, p h
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	msgsJson, _ := json.Marshal(msgs)
+	var sm models.SendMessages
+	sm.Messages = msgs
+	sm.MessageId = l
+	msgsJson, _ := json.Marshal(sm)
 	fmt.Fprintf(w, "%s", msgsJson)
 }
 

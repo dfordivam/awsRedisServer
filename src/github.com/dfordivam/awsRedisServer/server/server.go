@@ -45,8 +45,6 @@ func main() {
 
 	r.GET("/messages", uc.GetMessages)
 
-	// r.GET("/user/:id", uc.GetUserInfo)
-
 	handler := cors.AllowAll().Handler(r)
 	// Fire up the server
 	http.ListenAndServe("localhost:3000", handler)

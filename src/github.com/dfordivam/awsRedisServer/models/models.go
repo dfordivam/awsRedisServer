@@ -18,17 +18,25 @@ type (
 )
 
 type (
-	// Message
+	// Message stored in DB
 	MessageObject struct {
-		UserId  int64  `json:"userid"`
+		User    string `json:"user"`
 		Message string `json:"msg"`
 	}
 )
 
 type (
-	// User Info
-	UserInfo struct {
-		Id   int64  `json:"id"`
-		Name string `json:"name"`
+	// Message stored in DB
+	PostMessage struct {
+		Message       string `json:"msg"`
+		LastMessageId int64  `json:"id"`
+	}
+)
+
+type (
+	// Server Response
+	SendMessages struct {
+		Messages  []MessageObject `json:"msgs"`
+		MessageId int64           `json:"id"`
 	}
 )
