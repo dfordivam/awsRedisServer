@@ -105,7 +105,7 @@ func (uc UserController) CreateUser(w http.ResponseWriter, r *http.Request, p ht
 	count := uc.mainDB.Incr(userCount)
 	u.Id = count.Val()
 
-	ufv, _ := json.Marshal(models.UserNameHashFieldValue{u.Name, u.Id})
+	ufv, _ := json.Marshal(models.UserNameHashFieldValue{u.Pass, u.Id})
 	i := strconv.FormatInt(u.Id, 10)
 
 	// Add to DBs
